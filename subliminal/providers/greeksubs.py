@@ -38,17 +38,19 @@ class GreekSubsSubtitle(Subtitle):
         matches = set()
         guess = guessit(self.title)
 
-        if video.season and guess.get('season') == video.season:
-            matches.add('season')
+        if isinstance(video, Movie):
+            if video.title and sanitize(guess.get('title')) == sanitize(video.title):
+                matches.add('title')
+        else:
+            if hasattr(video, 'season') and guess.get('season') == video.season:
+                matches.add('season')
 
-        if video.episode and guess.get('episode') == video.episode:
-            matches.add('episode')
+            if hasattr(video, 'episode') and guess.get('episode') == video.episode:
+                matches.add('episode')
 
-        if video.series and sanitize(guess.get('title')) == sanitize(video.series):
-            matches.add('series')
+            if hasattr(video, 'series') and sanitize(guess.get('title')) == sanitize(video.series):
+                matches.add('series')
 
-        if video.title and sanitize(guess.get('title')) == sanitize(video.title):
-            matches.add('title')
 
         # release_group
         if (video.release_group and guess.get('release_group') and
@@ -71,10 +73,10 @@ class GreekSubsProvider(Provider):
         self.session.close()
 
     @region.cache_on_arguments(expiration_time=EPISODE_EXPIRATION_TIME)
-    def query(self, series, season, episode):
+    def query(self, query):
         response = self.session.get(
             'http://www.greek-subtitles.com/search.php',
-            params={'name': '{series} S{season:02d}E{episode:02d}'.format(series=series, season=int(season), episode=int(episode))}
+            params={'name': query}
         )
         response.raise_for_status()
 
@@ -96,7 +98,15 @@ class GreekSubsProvider(Provider):
         return subtitles
 
     def list_subtitles(self, video, languages):
-        return [s for s in self.query(video.series, video.season, video.episode) if s.language in languages]
+        if isinstance(video, Movie):
+            query = video.title
+        else:
+            query = (
+                '{series} S{season:02d}E{episode:02d}'.format(series=video.series,
+                                                              season=int(video.season),
+                                                              episode=int(video.episode))
+            )
+        return self.query(query)
 
     def download_subtitle(self, subtitle):
         # download as a zip
